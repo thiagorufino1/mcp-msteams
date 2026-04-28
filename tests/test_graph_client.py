@@ -65,3 +65,15 @@ async def test_graph_get_uses_cache_on_second_call(mock_token):
     r2 = await graph_get("/teams/team1", scopes=["https://graph.microsoft.com/.default"], cache_key="teams:team1", ttl=60)
     assert r1 == r2
     assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_graph_get_429_raises_throttling_after_retries(mock_token):
+    # Patch retry to not actually sleep (speed up test)
+    route = respx.get("https://graph.microsoft.com/v1.0/users/slow@test.com").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "0"}, json={})
+    )
+    from app.graph.client import graph_get
+    with pytest.raises(ThrottlingError):
+        await graph_get("/users/slow@test.com", scopes=["https://graph.microsoft.com/.default"])

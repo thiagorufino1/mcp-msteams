@@ -42,14 +42,7 @@ def _raise_for_status(response: httpx.Response, path: str) -> None:
         raise GraphError(f"Graph error {code} on {path}", code)
 
 
-@retry(
-    retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
-    stop=stop_after_attempt(4),
-    reraise=True,
-)
-async def _request(method: str, path: str, scopes: list[str], params: dict[str, Any] | None) -> Any:
-    token = get_token(scopes)
+async def _do_request(method: str, path: str, token: str, params: dict[str, Any] | None) -> Any:
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     response = await _http_client.request(method, path, headers=headers, params=params)
     _raise_for_status(response, path)
@@ -63,6 +56,17 @@ async def graph_get(
     cache_key: str | None = None,
     ttl: float = 0,
 ) -> Any:
+    token = get_token(scopes)
+
+    @retry(
+        retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        stop=stop_after_attempt(4),
+        reraise=True,
+    )
+    async def _retried() -> Any:
+        return await _do_request("GET", path, token, params)
+
     if cache_key and ttl > 0:
-        return await cached_get(cache_key, ttl, lambda: _request("GET", path, scopes, params))
-    return await _request("GET", path, scopes, params)
+        return await cached_get(cache_key, ttl, _retried)
+    return await _retried()
