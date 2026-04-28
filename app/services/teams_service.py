@@ -43,7 +43,9 @@ async def get_team_settings(team_id: str) -> dict[str, Any]:
         cache_key=f"team:{team_id}",
         ttl=settings.cache_ttl_teams,
     )
-    return {**data, "markdown": f"## Team Settings: {data.get('displayName', team_id)}\n\n```json\n{json.dumps(data, indent=2)}\n```"}
+    display = data.get("displayName", team_id)
+    markdown = f"## Team Settings: {display}\n\n```json\n{json.dumps(data, indent=2)}\n```"
+    return {**data, "markdown": markdown}
 
 
 async def get_channel_settings(team_id: str, channel_id: str) -> dict[str, Any]:

@@ -5,8 +5,7 @@ from typing import Any
 
 from app.config import settings
 from app.graph import endpoints
-from app.graph.client import _http_client, _raise_for_status, graph_get, graph_get_all
-from app.security.auth import get_token
+from app.graph.client import graph_get, graph_get_all
 from app.security.permissions import SCOPES
 
 
@@ -59,7 +58,12 @@ async def get_user_overview(upn: str) -> dict[str, Any]:
     presence: dict[str, Any] = {}
     if "id" in profile:
         try:
-            presence = await get_user_presence(upn)
+            presence = await graph_get(
+                endpoints.user_presence(profile["id"]),
+                scopes=SCOPES["presence_read"],
+                cache_key=f"presence:{profile['id']}",
+                ttl=settings.cache_ttl_presence,
+            )
         except Exception as exc:
             presence = {"error": str(exc)}
 
@@ -98,24 +102,16 @@ def _build_overview_markdown(
 
 async def search_user(query: str) -> dict[str, Any]:
     """Search for users by display name, email prefix, or UPN fragment."""
-    token = get_token(SCOPES["user_read"])
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-        "ConsistencyLevel": "eventual",
-    }
-    response = await _http_client.request(
-        "GET",
+    data = await graph_get(
         "/users",
-        headers=headers,
+        scopes=SCOPES["user_read"],
         params={
             "$search": f'"displayName:{query}" OR "userPrincipalName:{query}"',
             "$select": "id,displayName,userPrincipalName,jobTitle,department,mail",
             "$top": "10",
         },
+        extra_headers={"ConsistencyLevel": "eventual"},
     )
-    _raise_for_status(response, "/users")
-    data = response.json()
     users = data.get("value", [])
     lines = [f"## Search results for '{query}' ({len(users)} found)"]
     for u in users:

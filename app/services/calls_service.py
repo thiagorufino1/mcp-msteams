@@ -9,12 +9,18 @@ from app.security.permissions import SCOPES
 from app.utils.date_utils import days_ago
 
 _DATA_LAG_WARNING = "Note: Call Records API may have up to 15 minutes latency for recent calls."
+_CALL_RESULT_SUCCESS = "success"
+
+
+def _is_failed(result: str) -> bool:
+    return result.lower() not in (_CALL_RESULT_SUCCESS, "")
 
 
 async def _get_user_call_records(upn: str, days: int) -> list[dict[str, Any]]:
     since = days_ago(days)
+    safe_upn = upn.replace("'", "''")
     params = {
-        "$filter": f"participants/any(p:p/identity/user/userPrincipalName eq '{upn}') and startDateTime ge '{since}'",
+        "$filter": f"participants/any(p:p/identity/user/userPrincipalName eq '{safe_upn}') and startDateTime ge '{since}'",
         "$top": "50",
         "$orderby": "startDateTime desc",
     }
@@ -29,7 +35,7 @@ async def _get_user_call_records(upn: str, days: int) -> list[dict[str, Any]]:
 async def get_call_quality_summary(upn: str, days: int = 7) -> dict[str, Any]:
     records = await _get_user_call_records(upn, days)
     total = len(records)
-    failed = [r for r in records if r.get("result", "").lower() not in ("success", "")]
+    failed = [r for r in records if _is_failed(r.get("result", ""))]
     lines = [f"## Call Quality Summary: {upn} (last {days} days)", _DATA_LAG_WARNING]
     lines.append(f"- **Total calls:** {total}")
     lines.append(f"- **Failed calls:** {len(failed)}")
@@ -70,7 +76,7 @@ async def diagnose_call_quality(call_id: str) -> dict[str, Any]:
         f"- **Sessions:** {len(sessions)}",
         f"- **Start:** {record.get('startDateTime', 'N/A')}",
     ]
-    if result.lower() != "success":
+    if _is_failed(result):
         failure_info = record.get("failureInfo", {})
         lines.append(f"- **Failure reason:** {failure_info.get('reason', 'unknown')}")
     return {
@@ -87,7 +93,7 @@ async def diagnose_call_quality(call_id: str) -> dict[str, Any]:
 
 async def list_failed_calls(upn: str, days: int = 7) -> dict[str, Any]:
     records = await _get_user_call_records(upn, days)
-    failed = [r for r in records if r.get("result", "").lower() not in ("success", "")]
+    failed = [r for r in records if _is_failed(r.get("result", ""))]
     lines = [f"## Failed Calls: {upn} (last {days} days)", _DATA_LAG_WARNING, f"- **Count:** {len(failed)}"]
     for r in failed:
         lines.append(f"\n- **{r.get('startDateTime', '?')}** — result: {r.get('result', '?')} | id: {r.get('id', '?')}")
@@ -104,7 +110,7 @@ async def list_failed_calls(upn: str, days: int = 7) -> dict[str, Any]:
 async def list_poor_quality_calls(upn: str, days: int = 7) -> dict[str, Any]:
     records = await _get_user_call_records(upn, days)
     # Flag successful calls that might have quality issues (heuristic: no modalities data)
-    poor = [r for r in records if r.get("result", "").lower() == "success" and not r.get("modalities")]
+    poor = [r for r in records if not _is_failed(r.get("result", "")) and not r.get("modalities")]
     lines = [f"## Poor Quality Calls: {upn} (last {days} days)", _DATA_LAG_WARNING, f"- **Count:** {len(poor)}"]
     lines.append("\n*Note: Full quality metrics require session-level data via diagnose_call_quality.*")
     return {

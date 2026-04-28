@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.graph.errors import AuthError, GraphValidationError, NotFoundError, ThrottlingError
 from app.schemas.common import ResponseFormat
 
 
@@ -27,13 +28,6 @@ def _auto_markdown(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_markdown_table(headers: list[str], rows: list[list[Any]]) -> str:
-    header_row = " | ".join(headers)
-    separator = " | ".join(["---"] * len(headers))
-    data_rows = [" | ".join(str(cell) for cell in row) for row in rows]
-    return "\n".join([header_row, separator, *data_rows])
-
-
 def not_implemented_response(tool_name: str, todo: str) -> dict[str, Any]:
     return {
         "status": "not_implemented",
@@ -46,9 +40,6 @@ def not_implemented_response(tool_name: str, todo: str) -> dict[str, Any]:
             f"(admin.teams.microsoft.com) for now."
         ),
     }
-
-
-from app.graph.errors import NotFoundError, ThrottlingError, AuthError, GraphValidationError  # noqa: E402
 
 
 def graph_error_response(exc: Exception, context: str = "") -> dict[str, Any]:

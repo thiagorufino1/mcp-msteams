@@ -24,6 +24,13 @@ _http_client = httpx.AsyncClient(
     limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
 )
 
+_GRAPH_RETRY = retry(
+    retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
+
 
 def _raise_for_status(response: httpx.Response, path: str) -> None:
     code = response.status_code
@@ -42,8 +49,16 @@ def _raise_for_status(response: httpx.Response, path: str) -> None:
         raise GraphError(f"Graph error {code} on {path}", code)
 
 
-async def _do_request(method: str, path: str, token: str, params: dict[str, Any] | None) -> Any:
+async def _do_request(
+    method: str,
+    path: str,
+    token: str,
+    params: dict[str, Any] | None,
+    extra_headers: dict[str, str] | None = None,
+) -> Any:
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    if extra_headers:
+        headers.update(extra_headers)
     response = await _http_client.request(method, path, headers=headers, params=params)
     _raise_for_status(response, path)
     return response.json() if response.content else {}
@@ -55,17 +70,13 @@ async def graph_get(
     params: dict[str, Any] | None = None,
     cache_key: str | None = None,
     ttl: float = 0,
+    extra_headers: dict[str, str] | None = None,
 ) -> Any:
     token = get_token(scopes)
 
-    @retry(
-        retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
-        wait=wait_exponential(multiplier=1, min=2, max=30),
-        stop=stop_after_attempt(4),
-        reraise=True,
-    )
+    @_GRAPH_RETRY
     async def _retried() -> Any:
-        return await _do_request("GET", path, token, params)
+        return await _do_request("GET", path, token, params, extra_headers)
 
     if cache_key and ttl > 0:
         return await cached_get(cache_key, ttl, _retried)
@@ -77,26 +88,18 @@ async def graph_get_all(
     scopes: list[str],
     params: dict[str, Any] | None = None,
     max_pages: int = 10,
+    extra_headers: dict[str, str] | None = None,
 ) -> list[Any]:
-    """Fetch all pages from a paginated Graph endpoint via @odata.nextLink.
-
-    Returns a flat list of all items across pages (up to max_pages).
-    If more pages exist beyond max_pages, results are truncated.
-    """
+    """Fetch all pages from a paginated Graph endpoint via @odata.nextLink."""
     token = get_token(scopes)
     results: list[Any] = []
     next_url: str | None = path
     current_params: dict[str, Any] | None = params
     pages = 0
 
-    @retry(
-        retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
-        wait=wait_exponential(multiplier=1, min=2, max=30),
-        stop=stop_after_attempt(4),
-        reraise=True,
-    )
+    @_GRAPH_RETRY
     async def _fetch_page(url: str, p: dict[str, Any] | None) -> Any:
-        return await _do_request("GET", url, token, p)
+        return await _do_request("GET", url, token, p, extra_headers)
 
     while next_url and pages < max_pages:
         data = await _fetch_page(next_url, current_params)
