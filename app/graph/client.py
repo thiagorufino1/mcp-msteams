@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+from app.graph.cache import cached_get
+from app.graph.errors import (
+    AuthError,
+    GraphError,
+    GraphValidationError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ThrottlingError,
+)
+from app.security.auth import get_token
+
+GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
+
+_http_client = httpx.AsyncClient(
+    base_url=GRAPH_BASE_URL,
+    timeout=30.0,
+    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+)
+
+
+def _raise_for_status(response: httpx.Response, path: str) -> None:
+    code = response.status_code
+    if code == 429:
+        wait = int(response.headers.get("Retry-After", "5"))
+        raise ThrottlingError(f"Rate limited on {path}, retry after {wait}s", code)
+    if code == 404:
+        raise NotFoundError(f"Not found: {path}", code)
+    if code in (401, 403):
+        raise AuthError(f"Auth error {code} on {path}", code)
+    if code == 400:
+        raise GraphValidationError(f"Bad request on {path}: {response.text[:200]}", code)
+    if code >= 500:
+        raise ServiceUnavailableError(f"Server error {code} on {path}", code)
+    if response.is_error:
+        raise GraphError(f"Graph error {code} on {path}", code)
+
+
+@retry(
+    retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
+async def _request(method: str, path: str, scopes: list[str], params: dict[str, Any] | None) -> Any:
+    token = get_token(scopes)
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    response = await _http_client.request(method, path, headers=headers, params=params)
+    _raise_for_status(response, path)
+    return response.json() if response.content else {}
+
+
+async def graph_get(
+    path: str,
+    scopes: list[str],
+    params: dict[str, Any] | None = None,
+    cache_key: str | None = None,
+    ttl: float = 0,
+) -> Any:
+    if cache_key and ttl > 0:
+        return await cached_get(cache_key, ttl, lambda: _request("GET", path, scopes, params))
+    return await _request("GET", path, scopes, params)
