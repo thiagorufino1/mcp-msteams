@@ -2,7 +2,7 @@ import pytest
 import respx
 import httpx
 from unittest.mock import patch
-from app.graph.errors import ThrottlingError, NotFoundError, AuthError, ServiceUnavailableError
+from app.graph.errors import ThrottlingError, NotFoundError, AuthError
 from app.graph.cache import clear_cache
 
 
@@ -71,7 +71,7 @@ async def test_graph_get_uses_cache_on_second_call(mock_token):
 @respx.mock
 async def test_graph_get_429_raises_throttling_after_retries(mock_token):
     # Patch retry to not actually sleep (speed up test)
-    route = respx.get("https://graph.microsoft.com/v1.0/users/slow@test.com").mock(
+    respx.get("https://graph.microsoft.com/v1.0/users/slow@test.com").mock(
         return_value=httpx.Response(429, headers={"Retry-After": "0"}, json={})
     )
     from app.graph.client import graph_get
