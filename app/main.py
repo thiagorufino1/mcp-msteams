@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 
 from fastmcp import FastMCP
 
+from app.graph.client import _http_client
 from app.logging_config import logger
 from app.tools import (
     audit_tools,
@@ -25,8 +26,10 @@ from app.tools import (
 async def _lifespan(server: FastMCP) -> AsyncGenerator[None, None]:
     logger.info("server_starting", transport=os.getenv("FASTMCP_TRANSPORT", "http"))
     yield
-    from app.graph.client import _http_client
-    await _http_client.aclose()
+    try:
+        await _http_client.aclose()
+    except Exception:
+        pass
     logger.info("server_stopped")
 
 

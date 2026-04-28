@@ -1,9 +1,8 @@
 """Tests verifying all expected MCP tools are registered."""
 from __future__ import annotations
 
-import asyncio
-
 import pytest
+import pytest_asyncio
 
 EXPECTED_TOOLS = [
     "get_user_overview",
@@ -71,39 +70,38 @@ def _build_test_mcp():
     return mcp
 
 
-def _get_tool_names(mcp) -> set[str]:
-    """Get all registered tool names from a FastMCP instance."""
-    tools = asyncio.run(mcp.list_tools())
+@pytest_asyncio.fixture(scope="module")
+async def registered_tool_names() -> set[str]:
+    mcp = _build_test_mcp()
+    tools = await mcp.list_tools()
     return {t.name for t in tools}
 
 
-@pytest.fixture(scope="module")
-def registered_tool_names() -> set[str]:
-    mcp = _build_test_mcp()
-    return _get_tool_names(mcp)
-
-
-def test_all_expected_tools_registered(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_all_expected_tools_registered(registered_tool_names: set[str]) -> None:
     """Every tool in EXPECTED_TOOLS must appear in the registered tool set."""
     missing = [name for name in EXPECTED_TOOLS if name not in registered_tool_names]
     assert not missing, f"Missing tools: {missing}"
 
 
-def test_tool_count_at_least_expected(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_tool_count_at_least_expected(registered_tool_names: set[str]) -> None:
     """At least 33 tools must be registered."""
     assert len(registered_tool_names) >= 33, (
         f"Expected >= 33 tools, got {len(registered_tool_names)}: {sorted(registered_tool_names)}"
     )
 
 
-def test_no_unexpected_tool_names(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_no_unexpected_tool_names(registered_tool_names: set[str]) -> None:
     """All expected tool names are valid (no typos in the expected list)."""
     expected_set = set(EXPECTED_TOOLS)
     # All expected names must be present (duplicate check)
     assert len(EXPECTED_TOOLS) == len(expected_set), "EXPECTED_TOOLS has duplicates"
 
 
-def test_users_tools_registered(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_users_tools_registered(registered_tool_names: set[str]) -> None:
     user_tools = {
         "get_user_overview",
         "get_user_profile",
@@ -116,7 +114,8 @@ def test_users_tools_registered(registered_tool_names: set[str]) -> None:
     )
 
 
-def test_teams_tools_registered(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_teams_tools_registered(registered_tool_names: set[str]) -> None:
     team_tools = {
         "list_team_channels",
         "list_team_members",
@@ -132,7 +131,8 @@ def test_teams_tools_registered(registered_tool_names: set[str]) -> None:
     )
 
 
-def test_policies_and_calls_tools_registered(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_policies_and_calls_tools_registered(registered_tool_names: set[str]) -> None:
     tools = {
         "compare_user_policies",
         "detect_policy_conflicts",
@@ -146,7 +146,8 @@ def test_policies_and_calls_tools_registered(registered_tool_names: set[str]) ->
     )
 
 
-def test_phase4_stub_tools_registered(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_phase4_stub_tools_registered(registered_tool_names: set[str]) -> None:
     stub_tools = {
         "get_recent_channel_messages",
         "search_channel_messages",
@@ -165,7 +166,8 @@ def test_phase4_stub_tools_registered(registered_tool_names: set[str]) -> None:
     )
 
 
-def test_audit_tools_registered(registered_tool_names: set[str]) -> None:
+@pytest.mark.asyncio
+async def test_audit_tools_registered(registered_tool_names: set[str]) -> None:
     audit_tool_names = {"execution_history", "who_did_what", "support_case_summary"}
     assert audit_tool_names.issubset(registered_tool_names), (
         f"Missing audit tools: {audit_tool_names - registered_tool_names}"
