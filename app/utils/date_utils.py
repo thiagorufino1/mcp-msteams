@@ -12,4 +12,4 @@ def days_ago(n: int) -> str:
 
 def graph_date_filter(field: str, days: int) -> str:
     since = days_ago(days)
-    return f"{field} ge {since}"
+    return f"{field} ge '{since}'"

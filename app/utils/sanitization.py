@@ -1,7 +1,7 @@
 import re
 
 _JWT_RE = re.compile(r'eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]*')
-_UPN_RE = re.compile(r'(\S+)@(\S+\.\S+)')
+_UPN_RE = re.compile(r'([\w.+\-]+)@([\w\-]+(?:\.[\w\-]+)+)')
 
 
 def mask_upn(value: str) -> str:
