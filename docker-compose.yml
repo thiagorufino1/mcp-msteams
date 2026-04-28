@@ -1,0 +1,14 @@
+services:
+  teams-mcp:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - AZURE_TENANT_ID
+      - AZURE_CLIENT_ID
+      - AZURE_CLIENT_SECRET
+      - FASTMCP_TRANSPORT=http
+      - FASTMCP_HOST=0.0.0.0
+      - FASTMCP_PORT=8000
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
