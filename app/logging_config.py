@@ -9,7 +9,11 @@ from typing import Any, Callable
 
 import structlog
 
+from app.config import settings
+
 _trace_id: ContextVar[str] = ContextVar("trace_id", default="-")
+
+_log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
 
 structlog.configure(
     processors=[
@@ -18,7 +22,7 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.dev.ConsoleRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+    wrapper_class=structlog.make_filtering_bound_logger(_log_level),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
 )
@@ -34,6 +38,7 @@ def audited(fn: Callable[..., Any]) -> Callable[..., Any]:
         tid = uuid.uuid4().hex[:8]
         _trace_id.set(tid)
         t0 = time.monotonic()
+        elapsed_ms = 0
         tool_name = fn.__name__
 
         from app.utils.sanitization import sanitize_log_value
@@ -44,19 +49,19 @@ def audited(fn: Callable[..., Any]) -> Callable[..., Any]:
             result = await fn(*args, **kwargs)
             elapsed_ms = round((time.monotonic() - t0) * 1000)
             logger.info("tool_completed", tool=tool_name, trace_id=tid, elapsed_ms=elapsed_ms)
-            _record(tool_name, kwargs, elapsed_ms, "ok", None)
+            _record(tool_name, safe_kwargs, elapsed_ms, "ok", None)
             return result
         except Exception as exc:
             elapsed_ms = round((time.monotonic() - t0) * 1000)
             logger.error("tool_failed", tool=tool_name, trace_id=tid, elapsed_ms=elapsed_ms, error=str(exc))
-            _record(tool_name, kwargs, elapsed_ms, "error", type(exc).__name__)
+            _record(tool_name, safe_kwargs, elapsed_ms, "error", type(exc).__name__)
             raise
 
     return wrapper
 
 
-def _record(tool: str, kwargs: dict[str, Any], elapsed_ms: int, status: str, error_type: str | None) -> None:
+def _record(tool: str, safe_kwargs: dict[str, Any], elapsed_ms: int, status: str, error_type: str | None) -> None:
     from app.services.audit_service import record
     from app.utils.sanitization import mask_upn
-    upn_hint = mask_upn(str(kwargs.get("upn", kwargs.get("upn1", ""))))
+    upn_hint = mask_upn(str(safe_kwargs.get("upn", safe_kwargs.get("upn1", ""))))
     record(tool=tool, upn_hint=upn_hint, elapsed_ms=elapsed_ms, status=status, error_type=error_type)
