@@ -46,3 +46,44 @@ def not_implemented_response(tool_name: str, todo: str) -> dict[str, Any]:
             f"(admin.teams.microsoft.com) for now."
         ),
     }
+
+
+from app.graph.errors import NotFoundError, ThrottlingError, AuthError, GraphValidationError  # noqa: E402
+
+
+def graph_error_response(exc: Exception, context: str = "") -> dict[str, Any]:
+    """Convert a Graph API exception into a structured, LLM-actionable response."""
+    if isinstance(exc, NotFoundError):
+        return {
+            "error": "not_found",
+            "message": f"Resource not found{': ' + context if context else ''}.",
+            "suggested_action": "Verify the ID or UPN with the admin. Use search_user or list_user_teams to resolve identifiers.",
+            "markdown": f"**Not found:** {context or 'The requested resource'} does not exist in Microsoft 365. Verify the identifier.",
+        }
+    if isinstance(exc, ThrottlingError):
+        return {
+            "error": "throttled",
+            "message": str(exc),
+            "suggested_action": "Wait 15–30 seconds and retry the same tool call.",
+            "markdown": f"**Graph API throttled.** {exc} — Wait 15–30 seconds and retry.",
+        }
+    if isinstance(exc, AuthError):
+        return {
+            "error": "permission_denied",
+            "message": str(exc),
+            "suggested_action": "Check that the Azure App Registration has the required Graph permissions consented.",
+            "markdown": "**Permission denied.** The app registration may be missing a required Graph permission. Check Entra ID app registration.",
+        }
+    if isinstance(exc, GraphValidationError):
+        return {
+            "error": "invalid_input",
+            "message": str(exc),
+            "suggested_action": "Check the format of the input parameters (UPN must be email format, IDs must be GUIDs).",
+            "markdown": f"**Invalid input:** {exc}. Verify parameter formats.",
+        }
+    return {
+        "error": "graph_error",
+        "message": str(exc),
+        "suggested_action": "Retry the request. If the error persists, check Graph API status at status.office.com.",
+        "markdown": f"**Graph API error:** {exc}. Retry or check service status.",
+    }

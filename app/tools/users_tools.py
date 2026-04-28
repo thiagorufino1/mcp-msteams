@@ -14,7 +14,7 @@ from app.schemas.users import (
     ListUserTeamsParams,
 )
 from app.services import users_service
-from app.utils.response import render_response
+from app.utils.response import render_response, graph_error_response
 
 _ANNOTATIONS = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True}
 
@@ -28,7 +28,10 @@ def _register(mcp: FastMCP) -> None:
     ) -> Any:
         """Return a combined view of the user's profile, presence, and joined Teams."""
         p = GetUserOverviewParams.model_validate({"upn": upn, "response_format": response_format})
-        result = await users_service.get_user_overview(p.upn)
+        try:
+            result = await users_service.get_user_overview(p.upn)
+        except Exception as exc:
+            result = graph_error_response(exc, context=f"user '{p.upn}'")
         return render_response(result, p.response_format)
 
     @mcp.tool(name="get_user_profile", annotations={**_ANNOTATIONS, "title": "Get User Profile"})
@@ -39,7 +42,10 @@ def _register(mcp: FastMCP) -> None:
     ) -> Any:
         """Return detailed Azure AD profile for a user."""
         p = GetUserProfileParams.model_validate({"upn": upn, "response_format": response_format})
-        result = await users_service.get_user_profile(p.upn)
+        try:
+            result = await users_service.get_user_profile(p.upn)
+        except Exception as exc:
+            result = graph_error_response(exc, context=f"user '{p.upn}'")
         return render_response(result, p.response_format)
 
     @mcp.tool(name="get_user_presence", annotations={**_ANNOTATIONS, "title": "Get User Presence"})
@@ -50,7 +56,10 @@ def _register(mcp: FastMCP) -> None:
     ) -> Any:
         """Return real-time Teams presence status for a user (Available, Busy, Away, etc.)."""
         p = GetUserPresenceParams.model_validate({"upn": upn, "response_format": response_format})
-        result = await users_service.get_user_presence(p.upn)
+        try:
+            result = await users_service.get_user_presence(p.upn)
+        except Exception as exc:
+            result = graph_error_response(exc, context=f"presence for '{p.upn}'")
         return render_response(result, p.response_format)
 
     @mcp.tool(name="get_user_assigned_policies", annotations={**_ANNOTATIONS, "title": "Get User Assigned Policies"})
@@ -61,7 +70,10 @@ def _register(mcp: FastMCP) -> None:
     ) -> Any:
         """Return Teams policies assigned to a user (meeting, calling, messaging, etc.)."""
         p = GetUserAssignedPoliciesParams.model_validate({"upn": upn, "response_format": response_format})
-        result = await users_service.get_user_assigned_policies(p.upn)
+        try:
+            result = await users_service.get_user_assigned_policies(p.upn)
+        except Exception as exc:
+            result = graph_error_response(exc, context=f"policies for '{p.upn}'")
         return render_response(result, p.response_format)
 
     @mcp.tool(name="list_user_teams", annotations={**_ANNOTATIONS, "title": "List User Teams"})
@@ -72,5 +84,8 @@ def _register(mcp: FastMCP) -> None:
     ) -> Any:
         """List all Microsoft Teams the user is a member of."""
         p = ListUserTeamsParams.model_validate({"upn": upn, "response_format": response_format})
-        result = await users_service.list_user_teams(p.upn)
+        try:
+            result = await users_service.list_user_teams(p.upn)
+        except Exception as exc:
+            result = graph_error_response(exc, context=f"teams for '{p.upn}'")
         return render_response(result, p.response_format)
