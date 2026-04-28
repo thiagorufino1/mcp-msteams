@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,7 +7,7 @@ class Settings(BaseSettings):
 
     azure_tenant_id: str
     azure_client_id: str
-    azure_client_secret: str
+    azure_client_secret: SecretStr
 
     fastmcp_transport: str = "http"
     fastmcp_host: str = "127.0.0.1"
