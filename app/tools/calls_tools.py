@@ -26,7 +26,17 @@ def _register(mcp: FastMCP) -> None:
         days: int = 7,
         response_format: ResponseFormat = ResponseFormat.MARKDOWN,
     ) -> Any:
-        """Summarise call quality metrics for a user over the past N days. Note: up to 15min data lag."""
+        """
+        Summarise call statistics for a user over the past N days (total, failed, success rate).
+
+        USE when: Admin reports "user has been having call problems" — get the big picture first.
+        Note: Call Records API has up to 15 minutes latency for recent calls.
+
+        FLOW: get_call_quality_summary → if failed calls found: list_failed_calls →
+              pick a call_id → diagnose_call_quality for session-level detail.
+
+        REQUIRES: upn — full email address.
+        """
         p = GetCallQualitySummaryParams.model_validate({"upn": upn, "days": days, "response_format": response_format})
         try:
             result = await calls_service.get_call_quality_summary(p.upn, p.days)
@@ -40,7 +50,16 @@ def _register(mcp: FastMCP) -> None:
         call_id: str,
         response_format: ResponseFormat = ResponseFormat.MARKDOWN,
     ) -> Any:
-        """Diagnose a specific call using session-level metrics from the Call Records API."""
+        """
+        Diagnose a specific call using session and participant data from the Call Records API.
+
+        USE when: You have a specific call_id (from list_failed_calls or list_poor_quality_calls)
+        and need to understand what went wrong — codec, network, session breakdown.
+
+        REQUIRES: call_id — get this from the 'id' field in results of list_failed_calls
+        or list_poor_quality_calls.
+        Note: Call Records API may have up to 15 minutes latency.
+        """
         p = DiagnoseCallQualityParams.model_validate({"call_id": call_id, "response_format": response_format})
         try:
             result = await calls_service.diagnose_call_quality(p.call_id)

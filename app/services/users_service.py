@@ -5,7 +5,8 @@ from typing import Any
 
 from app.config import settings
 from app.graph import endpoints
-from app.graph.client import graph_get, graph_get_all
+from app.graph.client import _http_client, _raise_for_status, graph_get, graph_get_all
+from app.security.auth import get_token
 from app.security.permissions import SCOPES
 
 
@@ -93,3 +94,40 @@ def _build_overview_markdown(
     if len(team_list) > 10:
         lines.append(f"  - ...and {len(team_list) - 10} more")
     return "\n".join(lines)
+
+
+async def search_user(query: str) -> dict[str, Any]:
+    """Search for users by display name, email prefix, or UPN fragment."""
+    token = get_token(SCOPES["user_read"])
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "ConsistencyLevel": "eventual",
+    }
+    response = await _http_client.request(
+        "GET",
+        "/users",
+        headers=headers,
+        params={
+            "$search": f'"displayName:{query}" OR "userPrincipalName:{query}"',
+            "$select": "id,displayName,userPrincipalName,jobTitle,department,mail",
+            "$top": "10",
+        },
+    )
+    _raise_for_status(response, "/users")
+    data = response.json()
+    users = data.get("value", [])
+    lines = [f"## Search results for '{query}' ({len(users)} found)"]
+    for u in users:
+        lines.append(
+            f"- **{u.get('displayName', '?')}** — `{u.get('userPrincipalName', '?')}` | "
+            f"{u.get('jobTitle', '')} | {u.get('department', '')}"
+        )
+    if not users:
+        lines.append("No users found. Try a different name or email fragment.")
+    return {
+        "query": query,
+        "users": users,
+        "count": len(users),
+        "markdown": "\n".join(lines),
+    }

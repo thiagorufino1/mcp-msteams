@@ -35,6 +35,7 @@ EXPECTED_TOOLS = [
     "validate_voice_routing",
     "detect_voice_misconfiguration",
     "check_known_teams_incidents",
+    "search_user",
     "execution_history",
     "who_did_what",
     "support_case_summary",
@@ -86,9 +87,9 @@ async def test_all_expected_tools_registered(registered_tool_names: set[str]) ->
 
 @pytest.mark.asyncio
 async def test_tool_count_at_least_expected(registered_tool_names: set[str]) -> None:
-    """At least 33 tools must be registered."""
-    assert len(registered_tool_names) >= 33, (
-        f"Expected >= 33 tools, got {len(registered_tool_names)}: {sorted(registered_tool_names)}"
+    """At least 34 tools must be registered."""
+    assert len(registered_tool_names) >= 34, (
+        f"Expected >= 34 tools, got {len(registered_tool_names)}: {sorted(registered_tool_names)}"
     )
 
 
@@ -108,6 +109,7 @@ async def test_users_tools_registered(registered_tool_names: set[str]) -> None:
         "get_user_presence",
         "get_user_assigned_policies",
         "list_user_teams",
+        "search_user",
     }
     assert user_tools.issubset(registered_tool_names), (
         f"Missing user tools: {user_tools - registered_tool_names}"

@@ -26,7 +26,17 @@ def _register(mcp: FastMCP) -> None:
     @mcp.tool(name="who_did_what", annotations={**_ANNOTATIONS, "title": "Who Did What"})
     @audited
     async def who_did_what(upn_hint: str, limit: int = 20) -> Any:
-        """Return audit entries filtered by UPN hint (domain-fragment match). Shows which tools were invoked for a user."""
+        """
+        Return audit entries filtered by UPN or domain fragment.
+
+        USE when: Reconstructing what was investigated for a specific user during this session.
+
+        SEARCH BEHAVIOR: Pass the full UPN (alice@contoso.com) or domain fragment (contoso.com).
+        Searching by username prefix alone (e.g. 'alice') will NOT match — only the domain
+        portion is stored due to privacy masking.
+
+        NOTE: Audit log is in-memory only — data is lost when the server restarts.
+        """
         entries = audit_service.get_by_upn(upn_hint, limit=limit)
         lines = [f"## Activity for '{upn_hint}' ({len(entries)} entries)"]
         for e in entries:
@@ -36,7 +46,14 @@ def _register(mcp: FastMCP) -> None:
     @mcp.tool(name="support_case_summary", annotations={**_ANNOTATIONS, "title": "Support Case Summary"})
     @audited
     async def support_case_summary() -> Any:
-        """Return aggregate statistics about tool usage in this session (total calls, error rate, tools used)."""
+        """
+        Return aggregate statistics for this support session: total calls, error rate, tools used.
+
+        USE when: Closing a support case — provides a summary of what was investigated.
+
+        NOTE: Data is in-memory only. If the server has restarted, this reflects only
+        activity since the last startup.
+        """
         summary = audit_service.get_summary()
         lines = ["## Support Session Summary"]
         lines.append(f"- **Total calls:** {summary.get('total_calls', 0)}")
