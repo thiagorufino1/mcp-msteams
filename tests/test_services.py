@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, patch
 async def test_get_user_profile_calls_graph():
     mock_result = {"id": "abc123", "displayName": "Alice", "userPrincipalName": "alice@corp.com"}
 
-    with patch("app.services.users_service.graph_get", new=AsyncMock(return_value=mock_result)):
-        from app.services.users_service import get_user_profile
+    with patch("mcp_msteams.services.users_service.graph_get", new=AsyncMock(return_value=mock_result)):
+        from mcp_msteams.services.users_service import get_user_profile
         result = await get_user_profile("alice@corp.com")
 
     assert result["id"] == "abc123"
@@ -16,8 +16,8 @@ async def test_get_user_profile_calls_graph():
 
 @pytest.mark.asyncio
 async def test_detect_orphaned_team_no_members():
-    with patch("app.services.teams_service.graph_get_all", new=AsyncMock(return_value=[])):
-        from app.services.teams_service import detect_orphaned_team
+    with patch("mcp_msteams.services.teams_service.graph_get_all", new=AsyncMock(return_value=[])):
+        from mcp_msteams.services.teams_service import detect_orphaned_team
         result = await detect_orphaned_team("team-uuid-123")
     assert result["is_orphaned"] is True
     assert result["member_count"] == 0
@@ -26,8 +26,8 @@ async def test_detect_orphaned_team_no_members():
 @pytest.mark.asyncio
 async def test_detect_team_without_owner_has_owners():
     owners_list = [{"id": "u1", "displayName": "Alice"}]
-    with patch("app.services.teams_service.graph_get_all", new=AsyncMock(return_value=owners_list)):
-        from app.services.teams_service import detect_team_without_owner
+    with patch("mcp_msteams.services.teams_service.graph_get_all", new=AsyncMock(return_value=owners_list)):
+        from mcp_msteams.services.teams_service import detect_team_without_owner
         result = await detect_team_without_owner("team-uuid-123")
     assert result["has_no_owner"] is False
     assert result["owner_count"] == 1
@@ -44,9 +44,9 @@ async def test_get_user_overview_combines_profile_and_teams():
             return presence
         return profile
 
-    with patch("app.services.users_service.graph_get", new=mock_graph_get), \
-         patch("app.services.users_service.graph_get_all", new=AsyncMock(return_value=teams_list)):
-        from app.services.users_service import get_user_overview
+    with patch("mcp_msteams.services.users_service.graph_get", new=mock_graph_get), \
+         patch("mcp_msteams.services.users_service.graph_get_all", new=AsyncMock(return_value=teams_list)):
+        from mcp_msteams.services.users_service import get_user_overview
         result = await get_user_overview("alice@corp.com")
 
     assert result["upn"] == "alice@corp.com"

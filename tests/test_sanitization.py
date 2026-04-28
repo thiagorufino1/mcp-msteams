@@ -1,4 +1,4 @@
-from app.utils.sanitization import mask_upn, mask_token, sanitize_log_value
+from mcp_msteams.utils.sanitization import mask_upn, mask_token, sanitize_log_value
 
 
 def test_mask_upn_replaces_local_part():

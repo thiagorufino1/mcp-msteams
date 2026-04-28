@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from app.graph.cache import cached_get, clear_cache
+from mcp_msteams.graph.cache import cached_get, clear_cache
 
 
 @pytest.mark.asyncio

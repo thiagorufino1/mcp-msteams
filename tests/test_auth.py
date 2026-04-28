@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-import app.security.auth as auth_module
-from app.security.auth import get_token
-from app.graph.errors import AuthError
+import mcp_msteams.security.auth as auth_module
+from mcp_msteams.security.auth import get_token
+from mcp_msteams.graph.errors import AuthError
 
 
 def test_get_token_returns_access_token():

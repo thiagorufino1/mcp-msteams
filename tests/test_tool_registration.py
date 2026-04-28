@@ -44,7 +44,7 @@ EXPECTED_TOOLS = [
 
 def _build_test_mcp():
     from fastmcp import FastMCP
-    from app.tools import (
+    from mcp_msteams.tools import (
         audit_tools,
         calls_tools,
         devices_tools,
