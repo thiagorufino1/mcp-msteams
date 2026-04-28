@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from app.config import settings
+from app.graph import endpoints
+from app.graph.client import graph_get
+from app.security.permissions import SCOPES
+
+
+async def list_team_channels(team_id: str) -> dict[str, Any]:
+    data = await graph_get(
+        endpoints.team_channels(team_id),
+        scopes=SCOPES["channel_read"],
+        cache_key=f"channels:{team_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    channels = data.get("value", [])
+    markdown = _channels_markdown(team_id, channels)
+    return {"team_id": team_id, "channels": channels, "count": len(channels), "markdown": markdown}
+
+
+async def list_team_members(team_id: str) -> dict[str, Any]:
+    data = await graph_get(
+        endpoints.group_members(team_id),
+        scopes=SCOPES["team_read"],
+        cache_key=f"members:{team_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    members = data.get("value", [])
+    markdown = _members_markdown(team_id, members, role="member")
+    return {"team_id": team_id, "members": members, "count": len(members), "markdown": markdown}
+
+
+async def get_team_owners(team_id: str) -> dict[str, Any]:
+    data = await graph_get(
+        endpoints.group_owners(team_id),
+        scopes=SCOPES["team_read"],
+        cache_key=f"owners:{team_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    owners = data.get("value", [])
+    markdown = _members_markdown(team_id, owners, role="owner")
+    return {"team_id": team_id, "owners": owners, "count": len(owners), "markdown": markdown}
+
+
+async def get_team_settings(team_id: str) -> dict[str, Any]:
+    data = await graph_get(
+        endpoints.team(team_id),
+        scopes=SCOPES["team_read"],
+        cache_key=f"team:{team_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    return {**data, "markdown": f"## Team Settings: {data.get('displayName', team_id)}\n\n```json\n{json.dumps(data, indent=2)}\n```"}
+
+
+async def get_channel_settings(team_id: str, channel_id: str) -> dict[str, Any]:
+    data = await graph_get(
+        endpoints.team_channel(team_id, channel_id),
+        scopes=SCOPES["channel_read"],
+        cache_key=f"channel:{team_id}:{channel_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    return {**data, "markdown": f"## Channel: {data.get('displayName', channel_id)}\n- **Type:** {data.get('membershipType', 'standard')}\n- **Description:** {data.get('description', 'N/A')}"}
+
+
+async def check_private_shared_channels(team_id: str) -> dict[str, Any]:
+    data = await graph_get(
+        endpoints.team_channels(team_id),
+        scopes=SCOPES["channel_read"],
+        cache_key=f"channels_vis:{team_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    channels = data.get("value", [])
+    private = [c for c in channels if c.get("membershipType") == "private"]
+    shared = [c for c in channels if c.get("membershipType") == "shared"]
+    lines = [f"## Private & Shared Channels in Team {team_id}"]
+    lines.append(f"- **Private channels:** {len(private)}")
+    lines.append(f"- **Shared channels:** {len(shared)}")
+    if private:
+        lines.append("\n### Private Channels")
+        for c in private:
+            lines.append(f"  - {c.get('displayName', c['id'])}")
+    if shared:
+        lines.append("\n### Shared Channels")
+        for c in shared:
+            lines.append(f"  - {c.get('displayName', c['id'])}")
+    return {"team_id": team_id, "private_channels": private, "shared_channels": shared, "markdown": "\n".join(lines)}
+
+
+async def detect_orphaned_team(team_id: str) -> dict[str, Any]:
+    members_data = await graph_get(
+        endpoints.group_members(team_id),
+        scopes=SCOPES["team_read"],
+        cache_key=f"members:{team_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    members = members_data.get("value", [])
+    is_orphaned = len(members) == 0
+    status = "ORPHANED — no members" if is_orphaned else f"OK — {len(members)} member(s)"
+    return {
+        "team_id": team_id,
+        "is_orphaned": is_orphaned,
+        "member_count": len(members),
+        "status": status,
+        "markdown": f"## Orphaned Team Check: {team_id}\n- **Status:** {status}",
+    }
+
+
+async def detect_team_without_owner(team_id: str) -> dict[str, Any]:
+    owners_data = await graph_get(
+        endpoints.group_owners(team_id),
+        scopes=SCOPES["team_read"],
+        cache_key=f"owners:{team_id}",
+        ttl=settings.cache_ttl_teams,
+    )
+    owners = owners_data.get("value", [])
+    has_no_owner = len(owners) == 0
+    status = "NO OWNER — team has no owners" if has_no_owner else f"OK — {len(owners)} owner(s)"
+    return {
+        "team_id": team_id,
+        "has_no_owner": has_no_owner,
+        "owner_count": len(owners),
+        "owners": owners,
+        "status": status,
+        "markdown": f"## Owner Check: {team_id}\n- **Status:** {status}",
+    }
+
+
+def _channels_markdown(team_id: str, channels: list[dict[str, Any]]) -> str:
+    lines = [f"## Channels in Team {team_id} ({len(channels)} total)"]
+    for c in channels:
+        ctype = c.get("membershipType", "standard")
+        lines.append(f"- **{c.get('displayName', c.get('id', '?'))}** [{ctype}]")
+    return "\n".join(lines)
+
+
+def _members_markdown(team_id: str, members: list[dict[str, Any]], role: str) -> str:
+    lines = [f"## Team {role.capitalize()}s: {team_id} ({len(members)} total)"]
+    for m in members:
+        name = m.get("displayName", m.get("userPrincipalName", m.get("id", "?")))
+        upn = m.get("userPrincipalName", "")
+        lines.append(f"- {name} ({upn})" if upn else f"- {name}")
+    return "\n".join(lines)
