@@ -24,6 +24,27 @@ python -m mcp_msteams.server
 mcp-msteams
 ```
 
+## Claude Desktop Integration
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mcp-msteams": {
+      "command": "python",
+      "args": ["-m", "mcp_msteams.server"],
+      "env": {
+        "AZURE_TENANT_ID": "<your-tenant-id>",
+        "AZURE_CLIENT_ID": "<your-client-id>",
+        "AZURE_CLIENT_SECRET": "<your-client-secret>",
+        "FASTMCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
 ## Tests
 
 ```bash
@@ -48,6 +69,7 @@ pytest -v
 ## Tool Inventory
 
 ### Phase 1 — Users (fully implemented)
+- `search_user` — Resolve display name / partial email → UPN (use this first)
 - `get_user_overview` — Profile + presence + joined teams in one call
 - `get_user_profile` — Full Azure AD profile
 - `get_user_presence` — Real-time Teams presence
