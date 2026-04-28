@@ -57,7 +57,17 @@ def get_summary() -> dict[str, Any]:
 
 
 def get_by_upn(upn_hint: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Search audit history by UPN or domain fragment.
+
+    Note: upn_hint values in audit log are masked (u***@domain.com).
+    Search matches against the domain portion or the full masked hint.
+    For best results, pass the domain (e.g. 'contoso.com') or a unique domain fragment.
+    """
     with _lock:
         entries = list(_buffer)
-    matched = [e for e in entries if upn_hint.lower() in e.get("upn_hint", "").lower()]
+    query = upn_hint.lower()
+    # Extract domain from query if it looks like a UPN (user@domain)
+    if "@" in query:
+        query = query.split("@", 1)[1]
+    matched = [e for e in entries if query in e.get("upn_hint", "").lower()]
     return matched[-limit:]
