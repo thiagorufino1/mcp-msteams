@@ -16,8 +16,7 @@ async def test_get_user_profile_calls_graph():
 
 @pytest.mark.asyncio
 async def test_detect_orphaned_team_no_members():
-    empty = {"value": []}
-    with patch("app.services.teams_service.graph_get", new=AsyncMock(return_value=empty)):
+    with patch("app.services.teams_service.graph_get_all", new=AsyncMock(return_value=[])):
         from app.services.teams_service import detect_orphaned_team
         result = await detect_orphaned_team("team-uuid-123")
     assert result["is_orphaned"] is True
@@ -26,8 +25,8 @@ async def test_detect_orphaned_team_no_members():
 
 @pytest.mark.asyncio
 async def test_detect_team_without_owner_has_owners():
-    owners_data = {"value": [{"id": "u1", "displayName": "Alice"}]}
-    with patch("app.services.teams_service.graph_get", new=AsyncMock(return_value=owners_data)):
+    owners_list = [{"id": "u1", "displayName": "Alice"}]
+    with patch("app.services.teams_service.graph_get_all", new=AsyncMock(return_value=owners_list)):
         from app.services.teams_service import detect_team_without_owner
         result = await detect_team_without_owner("team-uuid-123")
     assert result["has_no_owner"] is False
@@ -37,17 +36,16 @@ async def test_detect_team_without_owner_has_owners():
 @pytest.mark.asyncio
 async def test_get_user_overview_combines_profile_and_teams():
     profile = {"id": "abc123", "displayName": "Alice", "userPrincipalName": "alice@corp.com"}
-    teams = {"value": [{"id": "t1", "displayName": "Sales Team"}]}
+    teams_list = [{"id": "t1", "displayName": "Sales Team"}]
     presence = {"availability": "Available", "activity": "Available"}
 
     async def mock_graph_get(path, *args, **kwargs):
-        if "joinedTeams" in path:
-            return teams
         if "presences" in path:
             return presence
         return profile
 
-    with patch("app.services.users_service.graph_get", new=mock_graph_get):
+    with patch("app.services.users_service.graph_get", new=mock_graph_get), \
+         patch("app.services.users_service.graph_get_all", new=AsyncMock(return_value=teams_list)):
         from app.services.users_service import get_user_overview
         result = await get_user_overview("alice@corp.com")
 

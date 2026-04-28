@@ -5,42 +5,33 @@ from typing import Any
 
 from app.config import settings
 from app.graph import endpoints
-from app.graph.client import graph_get
+from app.graph.client import graph_get, graph_get_all
 from app.security.permissions import SCOPES
 
 
 async def list_team_channels(team_id: str) -> dict[str, Any]:
-    data = await graph_get(
+    channels = await graph_get_all(
         endpoints.team_channels(team_id),
         scopes=SCOPES["channel_read"],
-        cache_key=f"channels:{team_id}",
-        ttl=settings.cache_ttl_teams,
     )
-    channels = data.get("value", [])
     markdown = _channels_markdown(team_id, channels)
     return {"team_id": team_id, "channels": channels, "count": len(channels), "markdown": markdown}
 
 
 async def list_team_members(team_id: str) -> dict[str, Any]:
-    data = await graph_get(
+    members = await graph_get_all(
         endpoints.group_members(team_id),
         scopes=SCOPES["team_read"],
-        cache_key=f"members:{team_id}",
-        ttl=settings.cache_ttl_teams,
     )
-    members = data.get("value", [])
     markdown = _members_markdown(team_id, members, role="member")
     return {"team_id": team_id, "members": members, "count": len(members), "markdown": markdown}
 
 
 async def get_team_owners(team_id: str) -> dict[str, Any]:
-    data = await graph_get(
+    owners = await graph_get_all(
         endpoints.group_owners(team_id),
         scopes=SCOPES["team_read"],
-        cache_key=f"owners:{team_id}",
-        ttl=settings.cache_ttl_teams,
     )
-    owners = data.get("value", [])
     markdown = _members_markdown(team_id, owners, role="owner")
     return {"team_id": team_id, "owners": owners, "count": len(owners), "markdown": markdown}
 
@@ -66,13 +57,10 @@ async def get_channel_settings(team_id: str, channel_id: str) -> dict[str, Any]:
 
 
 async def check_private_shared_channels(team_id: str) -> dict[str, Any]:
-    data = await graph_get(
+    channels = await graph_get_all(
         endpoints.team_channels(team_id),
         scopes=SCOPES["channel_read"],
-        cache_key=f"channels_vis:{team_id}",
-        ttl=settings.cache_ttl_teams,
     )
-    channels = data.get("value", [])
     private = [c for c in channels if c.get("membershipType") == "private"]
     shared = [c for c in channels if c.get("membershipType") == "shared"]
     lines = [f"## Private & Shared Channels in Team {team_id}"]
@@ -90,13 +78,10 @@ async def check_private_shared_channels(team_id: str) -> dict[str, Any]:
 
 
 async def detect_orphaned_team(team_id: str) -> dict[str, Any]:
-    members_data = await graph_get(
+    members = await graph_get_all(
         endpoints.group_members(team_id),
         scopes=SCOPES["team_read"],
-        cache_key=f"members:{team_id}",
-        ttl=settings.cache_ttl_teams,
     )
-    members = members_data.get("value", [])
     is_orphaned = len(members) == 0
     status = "ORPHANED — no members" if is_orphaned else f"OK — {len(members)} member(s)"
     return {
@@ -109,13 +94,10 @@ async def detect_orphaned_team(team_id: str) -> dict[str, Any]:
 
 
 async def detect_team_without_owner(team_id: str) -> dict[str, Any]:
-    owners_data = await graph_get(
+    owners = await graph_get_all(
         endpoints.group_owners(team_id),
         scopes=SCOPES["team_read"],
-        cache_key=f"owners:{team_id}",
-        ttl=settings.cache_ttl_teams,
     )
-    owners = owners_data.get("value", [])
     has_no_owner = len(owners) == 0
     status = "NO OWNER — team has no owners" if has_no_owner else f"OK — {len(owners)} owner(s)"
     return {

@@ -70,3 +70,39 @@ async def graph_get(
     if cache_key and ttl > 0:
         return await cached_get(cache_key, ttl, _retried)
     return await _retried()
+
+
+async def graph_get_all(
+    path: str,
+    scopes: list[str],
+    params: dict[str, Any] | None = None,
+    max_pages: int = 10,
+) -> list[Any]:
+    """Fetch all pages from a paginated Graph endpoint via @odata.nextLink.
+
+    Returns a flat list of all items across pages (up to max_pages).
+    If more pages exist beyond max_pages, results are truncated.
+    """
+    token = get_token(scopes)
+    results: list[Any] = []
+    next_url: str | None = path
+    current_params: dict[str, Any] | None = params
+    pages = 0
+
+    @retry(
+        retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        stop=stop_after_attempt(4),
+        reraise=True,
+    )
+    async def _fetch_page(url: str, p: dict[str, Any] | None) -> Any:
+        return await _do_request("GET", url, token, p)
+
+    while next_url and pages < max_pages:
+        data = await _fetch_page(next_url, current_params)
+        results.extend(data.get("value", []))
+        next_url = data.get("@odata.nextLink")
+        current_params = None  # nextLink already contains query params
+        pages += 1
+
+    return results

@@ -5,7 +5,7 @@ from typing import Any
 
 from app.config import settings
 from app.graph import endpoints
-from app.graph.client import graph_get
+from app.graph.client import graph_get, graph_get_all
 from app.security.permissions import SCOPES
 
 
@@ -30,12 +30,11 @@ async def get_user_presence(upn: str) -> dict[str, Any]:
 
 
 async def list_user_teams(upn: str) -> dict[str, Any]:
-    return await graph_get(
+    teams = await graph_get_all(
         endpoints.user_joined_teams(upn),
         scopes=SCOPES["team_read"],
-        cache_key=f"user_teams:{upn}",
-        ttl=settings.cache_ttl_teams,
     )
+    return {"value": teams, "count": len(teams)}
 
 
 async def get_user_assigned_policies(upn: str) -> dict[str, Any]:

@@ -34,5 +34,15 @@ def build_markdown_table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join([header_row, separator, *data_rows])
 
 
-def not_implemented_response(tool_name: str, todo: str) -> dict[str, str]:
-    return {"status": "not_implemented", "tool": tool_name, "todo": todo}
+def not_implemented_response(tool_name: str, todo: str) -> dict[str, Any]:
+    return {
+        "status": "not_implemented",
+        "tool": tool_name,
+        "todo": todo,
+        "markdown": (
+            f"**{tool_name}** is not yet implemented in this MCP server. "
+            f"This feature cannot be used to answer the question at this time. "
+            f"Direct the admin to the Microsoft Teams admin center "
+            f"(admin.teams.microsoft.com) for now."
+        ),
+    }
