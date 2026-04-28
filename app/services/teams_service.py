@@ -69,7 +69,7 @@ async def check_private_shared_channels(team_id: str) -> dict[str, Any]:
     data = await graph_get(
         endpoints.team_channels(team_id),
         scopes=SCOPES["channel_read"],
-        cache_key=f"channels:{team_id}",
+        cache_key=f"channels_vis:{team_id}",
         ttl=settings.cache_ttl_teams,
     )
     channels = data.get("value", [])
