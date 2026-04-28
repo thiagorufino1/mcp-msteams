@@ -1,4 +1,4 @@
-# teams-admin-support-mcp
+# mcp-msteams
 
 Read-only Microsoft Teams admin support MCP server. Query users, teams, policies, calls, and more via Microsoft Graph API. Designed for support/admin diagnostics — zero write operations.
 
@@ -19,15 +19,9 @@ cp .env.example .env
 ## Run
 
 ```bash
-python -m app.main
-# or
-teams-mcp
-```
-
-## Docker
-
-```bash
-docker compose up --build
+python -m mcp_msteams.server
+# or via installed entry point:
+mcp-msteams
 ```
 
 ## Tests
