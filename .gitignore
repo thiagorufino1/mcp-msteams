@@ -37,6 +37,7 @@ scratch/
 scratch_test*.py
 test_output.txt
 scratch_debug.py
+teste.txt
 
 # Local MCP server config (URL and transport are environment-specific)
 .mcp.json

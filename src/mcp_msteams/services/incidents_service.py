@@ -85,10 +85,10 @@ def _extract_overview_update_text(text: str) -> str:
         flags=re.IGNORECASE,
     )
     normalized = re.sub(r"current status:\s*", "", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"root cause:\s*", "Root cause: ", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"scope of impact:\s*", "Scope: ", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"next update by:\s*", "Next update by: ", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"more info:\s*", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"root cause:\s*", "Causa raiz: ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"scope of impact:\s*", "Escopo: ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"next update by:\s*", "Próxima atualização até: ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"more info:\s*", "Mais informações: ", normalized, flags=re.IGNORECASE)
     return normalized.strip(" -")
 
 
@@ -139,15 +139,15 @@ def _overview_summary_from_detail(issue: dict[str, Any]) -> str:
 
     parts: list[str] = []
     if latest_root:
-        parts.append(f"Root cause: {latest_root}")
+        parts.append(f"Causa raiz: {latest_root}")
     if latest_status:
         parts.append(latest_status)
     if latest_more:
-        parts.append(f"Mitigation/info: {latest_more}")
+        parts.append(f"Mitigação/info: {latest_more}")
     if latest_eta:
         parts.append(f"ETA: {latest_eta}")
     elif latest_next:
-        parts.append(f"Next update by: {latest_next}")
+        parts.append(f"Próxima atualização até: {latest_next}")
 
     if parts:
         return " ".join(parts)
@@ -194,9 +194,9 @@ async def check_known_teams_incidents() -> dict[str, Any]:
             continue
         detail_map[issue_id] = detail
 
-    lines = [f"## Open Teams Service Health ({len(teams_issues)})"]
+    lines = [f"## Integridade do Serviço do Teams ({len(teams_issues)})"]
     lines.append(
-        f"- **Incidentes:** {len(incidents)} | **Avisos/Advisories:** {len(advisories)} | **Outros:** {len(others)}"
+        f"- **Incidentes:** {len(incidents)} | **Avisos:** {len(advisories)} | **Outros:** {len(others)}"
     )
 
     if incidents:
@@ -212,7 +212,7 @@ async def check_known_teams_incidents() -> dict[str, Any]:
 
     if advisories:
         lines.append("")
-        lines.append("### Advisories")
+        lines.append("### Avisos")
         lines.append("| ID | Título | Resumo das atividades |")
         lines.append("|---|---|---|")
         for issue in advisories[:20]:
@@ -260,34 +260,40 @@ async def get_teams_incident_detail(issue_id: str) -> dict[str, Any]:
     lines.append(f"- **Início:** {issue.get('startDateTime', 'N/A')}")
     lines.append(f"- **Fim:** {issue.get('endDateTime', 'N/A')}")
     lines.append(f"- **Última atualização:** {issue.get('lastModifiedDateTime', 'N/A')}")
+
     if issue.get("impactDescription"):
         lines.append("")
         lines.append("### Impacto")
         lines.append(str(issue["impactDescription"]))
+
     posts = issue.get("posts") or []
     root_cause = ""
     for post in reversed(posts):
         root_cause = _extract_field(_post_summary(post), "Root cause:")
         if root_cause:
             break
+
     if root_cause:
         lines.append("")
         lines.append("### Causa Raiz")
         lines.append(root_cause)
+
     if issue.get("description"):
         lines.append("")
         lines.append("### Resumo")
         lines.append(str(issue["description"]))
+
     if issue.get("remediation"):
         lines.append("")
         lines.append("### Remediação")
         lines.append(str(issue["remediation"]))
+
     if posts:
         lines.append("")
         lines.append("### Atualizações")
-        for i, post in enumerate(posts[:10], 1):
+        for index, post in enumerate(posts[:10], 1):
             lines.append("")
-            lines.append(f"#### Atualização {i}")
+            lines.append(f"#### Atualização {index}")
             lines.append(f"- **Data:** {post.get('createdDateTime', 'N/A')}")
             lines.append(f"- **Tipo:** {post.get('postType', 'N/A')}")
             lines.append(f"- **Mensagem:** {_post_message_only(post)}")

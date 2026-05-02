@@ -13,6 +13,7 @@ async def test_get_user_profile_calls_graph():
 
     assert result["id"] == "abc123"
     assert result["displayName"] == "Alice"
+    assert "## Perfil do Usuário: Alice" in result["markdown"]
 
 
 @pytest.mark.asyncio
@@ -22,6 +23,22 @@ async def test_detect_orphaned_team_no_members():
         result = await detect_orphaned_team("team-uuid-123")
     assert result["is_orphaned"] is True
     assert result["member_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_detect_orphaned_team_uses_team_members_endpoint():
+    captured_paths: list[str] = []
+
+    async def mock_graph_get_all(path, *args, **kwargs):
+        captured_paths.append(path)
+        return [{"id": "u1"}]
+
+    with patch("mcp_msteams.services.teams_service.graph_get_all", new=mock_graph_get_all):
+        from mcp_msteams.services.teams_service import detect_orphaned_team
+        result = await detect_orphaned_team("team-uuid-123")
+
+    assert result["member_count"] == 1
+    assert captured_paths == ["/teams/team-uuid-123/members"]
 
 
 @pytest.mark.asyncio
@@ -261,3 +278,46 @@ async def test_get_user_assigned_policies_reads_effective_policy_assignments():
     assert result["assigned_policies"][0]["policyType"] == "TeamsMeetingPolicy"
     assert result["assigned_policies"][0]["policyName"] == "CustomMeetingPolicy"
     assert result["assigned_policies"][1]["assignmentType"] == "group"
+
+
+@pytest.mark.asyncio
+async def test_check_known_teams_incidents_uses_pt_br_labels():
+    issue_list = [
+        {
+            "id": "TM123",
+            "service": "Microsoft Teams",
+            "status": "serviceDegradation",
+            "classification": "advisory",
+            "title": "Example issue",
+        }
+    ]
+    issue_detail = {
+        "id": "TM123",
+        "service": "Microsoft Teams",
+        "status": "serviceDegradation",
+        "classification": "advisory",
+        "title": "Example issue",
+        "posts": [
+            {
+                "description": {
+                    "content": (
+                        "Current status: Monitoring a fix. "
+                        "Root cause: Example cause. "
+                        "Next update by: Monday, May 4, 2026, at 1:00 PM UTC"
+                    )
+                }
+            }
+        ],
+    }
+
+    with patch("mcp_msteams.services.incidents_service.graph_get_all", new=AsyncMock(return_value=issue_list)), \
+         patch("mcp_msteams.services.incidents_service.graph_get", new=AsyncMock(return_value=issue_detail)):
+        from mcp_msteams.services.incidents_service import check_known_teams_incidents
+        result = await check_known_teams_incidents()
+
+    markdown = result["markdown"]
+    assert "## Integridade do Serviço do Teams (1)" in markdown
+    assert "**Avisos:** 1" in markdown
+    assert "| ID | Título | Resumo das atividades |" in markdown
+    assert "Causa raiz: Example cause." in markdown
+    assert "Próxima atualização até:" in markdown
