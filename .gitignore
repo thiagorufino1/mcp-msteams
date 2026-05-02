@@ -1,48 +1,45 @@
-# Worktrees
-.worktrees/
-
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
+# Environments
+.env
 .venv/
 venv/
 env/
 
-# Environment
-.env
-.env.local
-.env.*.local
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Testing
+# Test and linting caches
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
-*.xml
 
-# Type checking
-.mypy_cache/
-.dmypy.json
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
 
-# Linting
-.ruff_cache/
-
-# IDEs
+# IDEs / Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 
-# Docker
-*.log
+# Local scratching / temp folders
+scratch/
+scratch_test*.py
+test_output.txt
+scratch_debug.py
+
+# Local MCP server config (URL and transport are environment-specific)
+.mcp.json
+
+# PowerShell scripts with hardcoded credentials (local use only)
+*.ps1
