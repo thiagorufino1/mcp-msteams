@@ -9,6 +9,10 @@ def user(upn: str) -> str:
     return f"/users/{_seg(upn)}"
 
 
+def teams_user_activity_detail(period: str) -> str:
+    return f"/reports/getTeamsUserActivityUserDetail(period='{period}')"
+
+
 def user_presence(user_id: str) -> str:
     return f"/users/{_seg(user_id)}/presence"
 
@@ -55,6 +59,10 @@ def user_online_meeting_attendance_records(upn: str, meeting_id: str, report_id:
 
 def service_announcement_issues() -> str:
     return "/admin/serviceAnnouncement/issues"
+
+
+def service_announcement_issue(issue_id: str) -> str:
+    return f"/admin/serviceAnnouncement/issues/{_seg(issue_id)}"
 
 
 def team(team_id: str) -> str:

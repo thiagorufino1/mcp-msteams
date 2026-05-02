@@ -2,6 +2,7 @@ import pytest
 import respx
 import httpx
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 from mcp_msteams.graph.errors import ThrottlingError, NotFoundError, AuthError
 from mcp_msteams.graph.cache import clear_cache
 
@@ -77,3 +78,32 @@ async def test_graph_get_429_raises_throttling_after_retries(mock_token):
     from mcp_msteams.graph.client import graph_get
     with pytest.raises(ThrottlingError):
         await graph_get("/users/slow@test.com", scopes=["https://graph.microsoft.com/.default"])
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_graph_get_429_parses_http_date_retry_after(mock_token):
+    retry_at = (datetime.now(timezone.utc) + timedelta(seconds=30)).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    respx.get("https://graph.microsoft.com/v1.0/users/date-retry@test.com").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": retry_at}, json={})
+    )
+    from mcp_msteams.graph.client import graph_get
+    with pytest.raises(ThrottlingError) as excinfo:
+        await graph_get("/users/date-retry@test.com", scopes=["https://graph.microsoft.com/.default"])
+    assert "retry after" in str(excinfo.value).lower()
+
+
+def test_graph_wait_uses_retry_after_from_throttling_error():
+    from unittest.mock import Mock
+    from mcp_msteams.graph.client import _graph_wait
+
+    retry_state = Mock()
+    retry_state.attempt_number = 2
+    retry_state.outcome = Mock()
+    retry_state.outcome.exception.return_value = ThrottlingError(
+        "throttled",
+        status_code=429,
+        retry_after_seconds=17,
+    )
+
+    assert _graph_wait(retry_state) == 17

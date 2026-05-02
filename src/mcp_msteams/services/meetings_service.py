@@ -62,12 +62,23 @@ async def get_recent_meetings(upn: str, days: int = 7) -> dict[str, Any]:
 
     _TYPE_LABEL = {"groupcall": "Reunião", "peertopeer": "Chamada 1:1"}
 
-    lines = [f"## Chamadas e Reuniões: {upn} (últimos {days} dias)"]
-    lines.append(f"- **Source:** {source}")
-    lines.append(f"- **Total:** {len(meetings)}")
+    # Compute total duration across ALL meetings (not just the 20 shown)
+    total_minutes = 0.0
+    for m in meetings:
+        s = _to_datetime(m.get("startDateTime"))
+        e = _to_datetime(m.get("endDateTime"))
+        if s and e:
+            total_minutes += (e - s).total_seconds() / 60
+    total_h = int(total_minutes) // 60
+    total_m = int(total_minutes) % 60
+
     grouped = {"groupCall": sum(1 for m in meetings if str(m.get("type","")).lower() in ("groupcall","grouppall")),
                "peerToPeer": sum(1 for m in meetings if str(m.get("type","")).lower() == "peertopeer")}
-    lines.append(f"- **Reuniões (groupCall):** {grouped['groupCall']} | **Chamadas 1:1 (peerToPeer):** {grouped['peerToPeer']}")
+
+    lines = [f"## Chamadas e Reuniões: {upn} (últimos {days} dias)"]
+    lines.append(f"- **Source:** {source}")
+    lines.append(f"- **Total:** {len(meetings)} | **Reuniões:** {grouped['groupCall']} | **Chamadas 1:1:** {grouped['peerToPeer']}")
+    lines.append(f"- **Duração total:** {total_h}h{total_m:02d}m ({round(total_minutes, 1)} min)")
     lines.append("")
     lines.append("| # | Tipo | Call ID | Start (BRT) | End (BRT) | Meeting Code | Participantes | Activity Type | Duração (min) |")
     lines.append("|---|------|---------|-------------|-----------|--------------|--------------|---------------|---------------|")
@@ -111,6 +122,8 @@ async def get_recent_meetings(upn: str, days: int = 7) -> dict[str, Any]:
         "count": len(meetings),
         "group_call_count": grouped["groupCall"],
         "peer_to_peer_count": grouped["peerToPeer"],
+        "total_duration_minutes": round(total_minutes, 1),
+        "total_duration_hhmm": f"{total_h}h{total_m:02d}m",
         "meetings": summary,
         "markdown": "\n".join(lines),
     }

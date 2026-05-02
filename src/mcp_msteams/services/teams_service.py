@@ -12,6 +12,9 @@ from mcp_msteams.security.permissions import SCOPES
 _TEAMS_FILTER = "resourceProvisioningOptions/Any(x:x eq 'Team')"
 _CONSISTENCY_HEADERS = {"ConsistencyLevel": "eventual"}
 _TEAMS_SELECT = "id,displayName,visibility,createdDateTime,description"
+_TEAM_COUNTS_CONCURRENCY = settings.graph_team_counts_concurrency
+_TEAM_RANKINGS_CONCURRENCY = settings.graph_team_rankings_concurrency
+_TEAM_SCAN_MAX_TEAMS = settings.graph_team_scan_max_teams
 
 
 # ── existing per-team functions ──────────────────────────────────────────────
@@ -232,8 +235,14 @@ async def list_all_teams(
         has_more = len(teams) == top
 
     if include_counts and teams:
+        sem = asyncio.Semaphore(_TEAM_COUNTS_CONCURRENCY)
+
+        async def _count_pair(team_id: str) -> tuple[int, int]:
+            async with sem:
+                return await asyncio.gather(_get_member_count(team_id), _get_owner_count(team_id))
+
         results = await asyncio.gather(
-            *[asyncio.gather(_get_member_count(t["id"]), _get_owner_count(t["id"])) for t in teams]
+            *[_count_pair(t["id"]) for t in teams]
         )
         for team, (mc, oc) in zip(teams, results):
             team["_memberCount"] = mc
@@ -308,9 +317,9 @@ async def list_teams_without_members(top: int = 20) -> dict[str, Any]:
     (max 20 concurrent), and reports the complete total found.
 
     `top` controls how many results are LISTED — it does NOT stop the scan early.
-    The scan always runs to completion (or up to 5000 teams) to provide an accurate total.
+    The scan always runs to completion (or up to the configured scan cap) to provide an accurate total.
     """
-    sem = asyncio.Semaphore(20)
+    sem = asyncio.Semaphore(_TEAM_COUNTS_CONCURRENCY)
 
     async def _safe_count(group_id: str) -> int:
         async with sem:
@@ -327,7 +336,7 @@ async def list_teams_without_members(top: int = 20) -> dict[str, Any]:
     }
     total_tenant: int | None = None
     teams_scanned = 0
-    max_scan = 5000  # cover tenants with up to 5000 teams completely
+    max_scan = _TEAM_SCAN_MAX_TEAMS
 
     while next_url and teams_scanned < max_scan:
         data = await graph_get(
@@ -398,7 +407,7 @@ async def list_teams_by_member_count(top: int = 10) -> dict[str, Any]:
     is_complete = not paged["has_more"]
 
     # Phase 2 — resolve member counts in parallel with higher concurrency
-    sem = asyncio.Semaphore(100)
+    sem = asyncio.Semaphore(_TEAM_RANKINGS_CONCURRENCY)
 
     async def _safe_count(group_id: str) -> int:
         async with sem:

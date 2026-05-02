@@ -177,6 +177,28 @@ def test_call_records_date_filter_uses_safe_cutoff_for_30_days():
         filter_value = _call_records_date_filter(30)
 
     assert filter_value == "startDateTime ge 2026-03-30T01:20:30Z"
+
+
+@pytest.mark.asyncio
+async def test_list_teams_without_members_respects_scan_cap():
+    page_calls = {"count": 0}
+
+    async def mock_graph_get(path, *args, **kwargs):
+        page_calls["count"] += 1
+        return {
+            "@odata.count": 5000,
+            "value": [{"id": f"team-{page_calls['count']}", "displayName": f"Team {page_calls['count']}"}],
+            "@odata.nextLink": "/groups?page=next",
+        }
+
+    with patch("mcp_msteams.services.teams_service.graph_get", new=mock_graph_get), \
+         patch("mcp_msteams.services.teams_service._get_member_count", new=AsyncMock(return_value=0)), \
+         patch("mcp_msteams.services.teams_service._TEAM_SCAN_MAX_TEAMS", 2):
+        from mcp_msteams.services.teams_service import list_teams_without_members
+        result = await list_teams_without_members(top=10)
+
+    assert result["teams_scanned"] == 2
+    assert result["is_complete_scan"] is False
 @pytest.mark.asyncio
 async def test_get_user_overview_includes_team_ids_in_markdown():
     profile = {"id": "abc123", "displayName": "Alice", "userPrincipalName": "alice@corp.com"}

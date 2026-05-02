@@ -13,7 +13,9 @@ from mcp_msteams.utils.date_utils import graph_date_filter, utc_now
 
 _DATA_LAG_WARNING = "Note: Due to Microsoft Graph API limitations, only the most recent global tenant calls are scanned. Older calls for this user may not appear unless Call Record Webhooks are configured."
 _CALL_RESULT_SUCCESS = "success"
-_CALL_RECORDS_MAX_PAGES = 3000
+_CALL_RECORDS_MAX_PAGES = settings.graph_call_records_max_pages
+_CALL_RECORD_DETAILS_BATCH_SIZE = settings.graph_call_record_detail_batch_size
+_CALL_RECORD_DETAILS_CONCURRENCY = min(settings.graph_call_record_detail_batch_size, 10)
 
 def _is_failed(result: str) -> bool:
     return result.lower() not in (_CALL_RESULT_SUCCESS, "")
@@ -75,13 +77,20 @@ async def _get_user_call_records(upn: str, days: int) -> list[dict[str, Any]]:
     if not candidate_ids:
         return []
 
+    sem = asyncio.Semaphore(_CALL_RECORD_DETAILS_CONCURRENCY)
+
+    async def _safe_fetch(call_id: str) -> dict[str, Any] | None:
+        async with sem:
+            try:
+                return await _get_call_record_with_participants(call_id)
+            except Exception:
+                return None
+
     matched_records = []
-    chunk_size = 50
-    for i in range(0, len(candidate_ids), chunk_size):
-        chunk = candidate_ids[i:i + chunk_size]
+    for i in range(0, len(candidate_ids), _CALL_RECORD_DETAILS_BATCH_SIZE):
+        chunk = candidate_ids[i:i + _CALL_RECORD_DETAILS_BATCH_SIZE]
         detailed_records = await asyncio.gather(
-            *(_get_call_record_with_participants(call_id) for call_id in chunk),
-            return_exceptions=True,
+            *(_safe_fetch(call_id) for call_id in chunk),
         )
         matched_records.extend([
             record for record in detailed_records
@@ -579,4 +588,3 @@ async def list_failed_calls(upn: str, days: int = 7) -> dict[str, Any]:
         "data_lag_warning": _DATA_LAG_WARNING,
         "markdown": "\n".join(lines),
     }
-

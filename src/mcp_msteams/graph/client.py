@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import RetryCallState, retry, retry_if_exception_type, stop_after_attempt
 
 from mcp_msteams.graph.cache import cached_get
 from mcp_msteams.graph.errors import (
@@ -24,19 +26,49 @@ _http_client = httpx.AsyncClient(
     limits=httpx.Limits(max_connections=100, max_keepalive_connections=50),
 )
 
+
+def _graph_wait(retry_state: RetryCallState) -> float:
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if isinstance(exc, ThrottlingError) and exc.retry_after_seconds is not None:
+        return min(max(exc.retry_after_seconds, 1), 60)
+    attempt = max(retry_state.attempt_number, 1)
+    return min(max(2 ** (attempt - 1), 2), 30)
+
+
 _GRAPH_RETRY = retry(
     retry=retry_if_exception_type((ThrottlingError, ServiceUnavailableError)),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
+    wait=_graph_wait,
     stop=stop_after_attempt(4),
     reraise=True,
 )
 
 
+def _parse_retry_after_seconds(value: str | None) -> int:
+    if not value:
+        return 5
+    try:
+        return max(0, int(value))
+    except ValueError:
+        pass
+    try:
+        retry_at = parsedate_to_datetime(value)
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        delta = (retry_at - datetime.now(timezone.utc)).total_seconds()
+        return max(0, int(delta))
+    except (TypeError, ValueError, IndexError):
+        return 5
+
+
 def _raise_for_status(response: httpx.Response, path: str) -> None:
     code = response.status_code
     if code == 429:
-        wait = int(response.headers.get("Retry-After", "5"))
-        raise ThrottlingError(f"Rate limited on {path}, retry after {wait}s", code)
+        wait = _parse_retry_after_seconds(response.headers.get("Retry-After"))
+        raise ThrottlingError(
+            f"Rate limited on {path}, retry after {wait}s",
+            code,
+            retry_after_seconds=wait,
+        )
     if code == 404:
         raise NotFoundError(f"Not found: {path}", code)
     if code in (401, 403):

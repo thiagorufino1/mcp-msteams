@@ -10,11 +10,12 @@ _ANNOTATIONS = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint"
 
 
 def _register(mcp: FastMCP) -> None:
-    @mcp.tool(name="get_recent_meetings", annotations={**_ANNOTATIONS, "title": "Get Recent Meetings"})
+    @mcp.tool(name="get_recent_meetings", annotations={**_ANNOTATIONS, "title": "Get Weekly Call Summary"})
     @audited
     async def get_recent_meetings(upn: str, days: int = 7, response_format: ResponseFormat = ResponseFormat.MARKDOWN) -> Any:
         """List recent calls and meetings for a user — both groupCall (meetings/conferences) and peerToPeer (1:1 calls).
 
+        PRIMARY TOOL for: weekly summary / resumo semanal / meeting counts / call counts / total interactions / total duration.
         USE when: user asks to list, show, or count meetings, calls, or interactions for a user.
         DISPLAY: always show the full markdown table — never summarize or paraphrase it.
         The table includes a "Tipo" column: "Reunião" = groupCall, "Chamada 1:1" = peerToPeer.

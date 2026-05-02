@@ -1,25 +1,32 @@
 from __future__ import annotations
 
 import pytest
+from unittest.mock import patch
 
-from mcp_msteams.logging_config import audited
+from mcp_msteams.logging_config import audited, _result_status
+
+
+def test_result_status_for_structured_error_response():
+    status, error_type = _result_status({"error": "permission_denied", "message": "Forbidden"})
+    assert status == "error"
+    assert error_type == "permission_denied"
 
 
 @pytest.mark.asyncio
-async def test_audited_records_error_status_for_structured_error_response():
-    recorded: list[tuple[str, str | None]] = []
+async def test_audited_sanitizes_logged_exception_message():
+    captured: list[str] = []
 
     @audited
     async def sample_tool() -> dict[str, str]:
-        return {"error": "permission_denied", "message": "Forbidden"}
+        raise RuntimeError("token eyJabc.def.ghi for alice@contoso.com")
 
-    def fake_record(tool: str, safe_kwargs: dict[str, str], elapsed_ms: int, status: str, error_type: str | None) -> None:
-        recorded.append((status, error_type))
+    def fake_error(_event: str, **kwargs: str) -> None:
+        captured.append(kwargs["error"])
 
-    from unittest.mock import patch
+    with patch("mcp_msteams.logging_config.logger.error", new=fake_error):
+        with pytest.raises(RuntimeError):
+            await sample_tool()
 
-    with patch("mcp_msteams.logging_config._record", new=fake_record):
-        result = await sample_tool()
-
-    assert result["error"] == "permission_denied"
-    assert recorded == [("error", "permission_denied")]
+    assert captured
+    assert "[TOKEN]" in captured[0]
+    assert "alice@contoso.com" not in captured[0]

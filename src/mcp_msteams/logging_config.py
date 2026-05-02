@@ -10,17 +10,25 @@ from typing import Any, Callable
 import structlog
 
 from mcp_msteams.config import settings
+from mcp_msteams.utils.sanitization import sanitize_log_value
 
 _trace_id: ContextVar[str] = ContextVar("trace_id", default="-")
 
 _log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
+_log_format = settings.log_format.lower()
+
+_renderer = (
+    structlog.dev.ConsoleRenderer()
+    if _log_format == "console"
+    else structlog.processors.JSONRenderer()
+)
 
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer(),
+        _renderer,
     ],
     wrapper_class=structlog.make_filtering_bound_logger(_log_level),
     context_class=dict,
@@ -31,7 +39,10 @@ logger = structlog.get_logger("teams_mcp")
 
 
 def audited(fn: Callable[..., Any]) -> Callable[..., Any]:
-    """Decorator: injects trace_id, logs invocation/completion/failure, writes audit entry."""
+    """Decorator: injects trace_id and logs invocation/completion/failure.
+
+    Note: this is structured execution logging, not a persistent audit trail.
+    """
 
     @functools.wraps(fn)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -41,7 +52,6 @@ def audited(fn: Callable[..., Any]) -> Callable[..., Any]:
         elapsed_ms = 0
         tool_name = fn.__name__
 
-        from mcp_msteams.utils.sanitization import sanitize_log_value
         safe_kwargs = {k: sanitize_log_value(str(v)) for k, v in kwargs.items()}
         logger.info("tool_invoked", tool=tool_name, trace_id=tid, **safe_kwargs)
 
@@ -50,12 +60,16 @@ def audited(fn: Callable[..., Any]) -> Callable[..., Any]:
             elapsed_ms = round((time.monotonic() - t0) * 1000)
             status, error_type = _result_status(result)
             logger.info("tool_completed", tool=tool_name, trace_id=tid, elapsed_ms=elapsed_ms, status=status)
-            _record(tool_name, safe_kwargs, elapsed_ms, status, error_type)
             return result
         except Exception as exc:
             elapsed_ms = round((time.monotonic() - t0) * 1000)
-            logger.error("tool_failed", tool=tool_name, trace_id=tid, elapsed_ms=elapsed_ms, error=str(exc))
-            _record(tool_name, safe_kwargs, elapsed_ms, "error", type(exc).__name__)
+            logger.error(
+                "tool_failed",
+                tool=tool_name,
+                trace_id=tid,
+                elapsed_ms=elapsed_ms,
+                error=sanitize_log_value(str(exc)),
+            )
             raise
 
     return wrapper
@@ -70,10 +84,3 @@ def _result_status(result: Any) -> tuple[str, str | None]:
     if result.get("status") == "not_implemented":
         return ("not_implemented", "not_implemented")
     return ("ok", None)
-
-
-def _record(tool: str, safe_kwargs: dict[str, Any], elapsed_ms: int, status: str, error_type: str | None) -> None:
-    from mcp_msteams.services.audit_service import record
-    from mcp_msteams.utils.sanitization import mask_upn
-    upn_hint = mask_upn(str(safe_kwargs.get("upn", safe_kwargs.get("upn1", ""))))
-    record(tool=tool, upn_hint=upn_hint, elapsed_ms=elapsed_ms, status=status, error_type=error_type)

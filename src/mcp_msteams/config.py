@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     fastmcp_host: str = "127.0.0.1"
     fastmcp_port: int = 8000
     log_level: str = "INFO"
+    log_format: str = "json"
 
     audit_buffer_size: int = 500
     cache_ttl_presence: int = 30
@@ -22,6 +23,12 @@ class Settings(BaseSettings):
     cache_ttl_calls: int = 120
     cache_ttl_incidents: int = 300
     cache_ttl_devices: int = 300
+
+    graph_call_records_max_pages: int = 12
+    graph_call_record_detail_batch_size: int = 20
+    graph_team_counts_concurrency: int = 20
+    graph_team_rankings_concurrency: int = 40
+    graph_team_scan_max_teams: int = 2000
 
 
 settings = Settings()

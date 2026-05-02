@@ -310,10 +310,11 @@ def _register(mcp: FastMCP) -> None:
                  Does NOT affect scan coverage — the full tenant is always scanned.
         RETURNS: empty groups found + total count across full scan.
         GRAPH API LIMITATION: $filter=members/$count eq 0 is not supported for groups.
-        This tool paginates through ALL teams (100 per page, up to 5000 teams),
-        checking member counts in parallel (up to 20 concurrent checks).
+        This tool paginates through teams in 100-item pages, up to the server-side
+        scan cap configured for this MCP instance, checking member counts with
+        bounded concurrency.
         The total count shown reflects ALL empty teams found, not just the listed ones.
-        PERFORMANCE: Scanning 4000+ teams takes approximately 40–80 seconds.
+        PERFORMANCE: Expensive on large tenants — use only when a tenant-wide scan is necessary.
         """
         p = ListTeamsWithoutMembersParams.model_validate({"top": top, "response_format": response_format})
         try:
@@ -334,11 +335,8 @@ def _register(mcp: FastMCP) -> None:
         PARAMETERS:
           - top: how many groups to return in the ranking (default 10, max 50).
         RETURNS: groups sorted by memberCount descending with member counts shown.
-        PERFORMANCE: Scans ALL teams in the tenant (full paginated scan, up to 5000
-        teams, 100 per page, 20 parallel member-count checks per batch).
-        Scanning 4000+ teams takes approximately 40–80 seconds.
-        NOTE: Previous sample-based approach (alphabetical batch) was inaccurate
-        because the first alphabetical groups tend to be inactive/empty.
+        PERFORMANCE: Full-tenant scan with bounded concurrency and server-side scan cap.
+        Use only when a tenant-wide ranking is actually needed.
         """
         p = ListTeamsByMemberCountParams.model_validate({"top": top, "response_format": response_format})
         try:

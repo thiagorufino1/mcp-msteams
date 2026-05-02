@@ -9,16 +9,12 @@ from fastmcp import FastMCP
 from mcp_msteams.graph.client import _http_client
 from mcp_msteams.logging_config import logger
 from mcp_msteams.tools import (
-    audit_tools,
     calls_tools,
-    devices_tools,
     incidents_tools,
     meetings_tools,
-    messages_tools,
-    policies_tools,
+    reports_tools,
     teams_tools,
     users_tools,
-    voice_tools,
 )
 
 
@@ -37,14 +33,10 @@ mcp = FastMCP("teams-admin-support-mcp", lifespan=_lifespan)
 
 users_tools._register(mcp)
 teams_tools._register(mcp)
-policies_tools._register(mcp)
 calls_tools._register(mcp)
-messages_tools._register(mcp)
 meetings_tools._register(mcp)
-devices_tools._register(mcp)
-voice_tools._register(mcp)
+reports_tools._register(mcp)
 incidents_tools._register(mcp)
-audit_tools._register(mcp)
 
 
 def main() -> None:
